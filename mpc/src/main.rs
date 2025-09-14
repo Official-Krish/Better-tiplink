@@ -4,6 +4,23 @@ pub mod error;
 pub mod serialization;
 pub mod tss;
 
+use crate::error::Error as MpcError;
+use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::pubkey::Pubkey;
+
+pub fn create_unsigned_transaction(amount: f64, to: &Pubkey, memo: Option<String>, payer: &Pubkey) -> Transaction {
+    let amount = native_token::sol_to_lamports(amount);
+    let transfer_ins = system_instruction::transfer(payer, to, amount);
+    let msg = match memo {
+        None => Message::new(&[transfer_ins], Some(payer)),
+        Some(memo) => {
+            let memo_ins = Instruction { program_id: spl_memo::id(), accounts: Vec::new(), data: memo.into_bytes() };
+            Message::new(&[transfer_ins, memo_ins], Some(payer))
+        }
+    };
+    Transaction::new_unsigned(msg)
+}
+
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> {
     HttpServer::new(|| {

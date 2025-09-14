@@ -12,7 +12,7 @@ use crate::{create_unsigned_transaction, Error};
 /// Create the aggregate public key, pass key=None if you don't care about the coefficient
 pub fn key_agg(keys: Vec<Pubkey>, key: Option<Pubkey>) -> Result<musig2::PublicKeyAgg, Error> {
     let convert_keys = |k: Pubkey| {
-        Point::from_bytes(&k.to_bytes()).map_err(|e| Error::DeserializationFailed {
+        <Point<Ed25519> as Point>::from_bytes(&k.to_bytes()).map_err(|e| Error::DeserializationFailed {
             error: DeserializationError::InvalidPoint(e),
             field_name: "keys",
         })
