@@ -52,7 +52,7 @@ impl Store {
             "SELECT id FROM users WHERE email = $1",
             request.email
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.backend)
         .await
         .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
@@ -79,7 +79,7 @@ impl Store {
             created_at,
             pub_key
         )
-        .execute(&self.pool)
+        .execute(&self.backend)
         .await
         .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
@@ -100,7 +100,7 @@ impl Store {
             "SELECT id, email, password, created_at, public_key FROM users WHERE email = $1",
             email
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.backend)
         .await
         .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
@@ -133,7 +133,7 @@ impl Store {
             "SELECT id, email, created_at, public_key FROM users WHERE id = $1",
             user_id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.backend)
         .await
         .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
