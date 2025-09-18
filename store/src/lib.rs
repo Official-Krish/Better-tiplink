@@ -7,7 +7,9 @@ pub struct Store {
 }
 
 impl Store {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
+    pub async fn new() -> Result<Self, sqlx::Error> {
+            let database_url = dotenvy::var("DATABASE_URL").map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
+            let pool = PgPool::connect(&database_url).await?;
+            Ok(Self { pool })
+        }
 }

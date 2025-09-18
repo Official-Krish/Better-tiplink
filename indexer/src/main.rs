@@ -1,4 +1,4 @@
-use yellowstone::GeyserGrpcClient;
+use crate::yellowstone::{GeyserGrpcClient};
 pub mod yellowstone;
 
 #[tokio::main]

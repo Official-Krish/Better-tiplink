@@ -69,7 +69,7 @@ impl Store {
 
         // Insert user into database
         sqlx::query!(
-            "INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO users (id, email, password, created_at) VALUES ($1, $2, $3, $4)",
             user_id,
             request.email,
             password_hash,
