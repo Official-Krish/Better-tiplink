@@ -16,7 +16,7 @@ async fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
     };
-    let arced_s = Arc::new(Mutex::new(s));
+    let arced_s = Arc::new(Mutex::new(s.backend));
     HttpServer::new(move || {
         App::new()
             .service(sign_up)  

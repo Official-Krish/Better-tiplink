@@ -42,6 +42,7 @@ async fn main() -> Result<(), std::io::Error> {
 }
 
 async fn generate() -> Result<HttpResponse, Error> {
+    
     Ok(HttpResponse::Ok().body("Hello, world!"))
 }
 
