@@ -1,12 +1,13 @@
 use crate::Store;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
+use chrono::{Utc};
 
 #[derive(Debug, Clone)]
 pub struct User {
     pub id: String,
     pub email: String,
     pub created_at: String,
+    pub public_key: String,
 }
 
 #[derive(Debug)]
@@ -66,14 +67,17 @@ impl Store {
         // Generate user ID and timestamp
         let user_id = Uuid::new_v4().to_string();
         let created_at = Utc::now();
+        let pub_key = "placeholder_public_key"; 
 
         // Insert user into database
         sqlx::query!(
-            "INSERT INTO users (id, email, password, created_at) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO users (id, email, password, created_at, updated_at, public_key) VALUES ($1, $2, $3, $4, $5, $6)",
             user_id,
             request.email,
             password_hash,
-            created_at
+            created_at,
+            created_at,
+            pub_key
         )
         .execute(&self.pool)
         .await
@@ -84,6 +88,65 @@ impl Store {
             id: user_id,
             email: request.email,
             created_at: created_at.to_rfc3339(),
+            public_key: pub_key.to_string(),
+        };
+
+        Ok(user)
+    }
+
+    pub async fn sign_in(&self, email: String, password: String) -> Result<User, UserError> {
+        // Fetch user by email
+        let record = sqlx::query!(
+            "SELECT id, email, password, created_at, public_key FROM users WHERE email = $1",
+            email
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+
+        let record = match record {
+            Some(rec) => rec,
+            None => return Err(UserError::InvalidInput("Invalid email or password".to_string())),
+        };
+
+        // Verify password
+        let is_valid = bcrypt::verify(&password, &record.password)
+            .map_err(|e| UserError::DatabaseError(format!("Password verification failed: {}", e)))?;
+
+        if !is_valid {
+            return Err(UserError::InvalidInput("Invalid email or password".to_string()));
+        }
+
+        // Return the user
+        let user = User {
+            id: record.id,
+            email: record.email,
+            created_at: record.created_at.to_rfc3339(),
+            public_key: record.public_key,
+        };
+
+        Ok(user)
+    }
+
+    pub async fn get_user_by_id(&self, user_id: String) -> Result<User, UserError> {
+        let record = sqlx::query!(
+            "SELECT id, email, created_at, public_key FROM users WHERE id = $1",
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+
+        let record = match record {
+            Some(rec) => rec,
+            None => return Err(UserError::InvalidInput("User not found".to_string())),
+        };
+
+        let user = User {
+            id: record.id,
+            email: record.email,
+            created_at: record.created_at.to_rfc3339(),
+            public_key: record.public_key, 
         };
 
         Ok(user)
