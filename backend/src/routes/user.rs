@@ -26,8 +26,19 @@ pub struct UserResponse {
 }
 
 #[derive(Serialize)]
+pub struct SignupOutput {
+    pub token: String,
+    pub public_key: String,
+}
+
+#[derive(Serialize)]
 pub struct AuthResponse {
     pub token: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GeneratePubKeyInput {
+    pub user_id: String,
 }
 
 #[actix_web::post("/signup")]
@@ -44,10 +55,37 @@ pub async fn sign_up(req: web::Json<SignUpRequest>, store: web::Data<Arc<Mutex<S
         Ok(user) => user,
         Err(err) => return Ok(HttpResponse::BadRequest().body(err.to_string())),
     };
+    let client = reqwest::Client::new();
+    let data_to_send = GeneratePubKeyInput {
+        user_id: user.id.clone(),
+    };
+
+    let target_url = "http://localhost:8080/generate";
+    let mut pub_keys = vec![];
+
+    match client.post(target_url)
+        .json(&data_to_send)
+        .send()
+        .await
+    {
+        Ok(response) => {
+            if response.status().is_success() {
+                let response_body = response.text().await.unwrap_or_default();
+                pub_keys.push(response_body);
+            } else {
+                let error_message = format!("Failed to generate public key: {:?}", response.status());
+                return Ok(HttpResponse::InternalServerError().body(error_message));
+            }
+        }
+        Err(e) => {
+            let error_message = format!("Error generating public key: {:?}", e);
+            return Ok(HttpResponse::InternalServerError().body(error_message));
+        }
+    }
     let jwt = create_jwt(user.id.clone());
     match jwt {
         Ok(token) => {
-            let response = AuthResponse { token };
+            let response = SignupOutput { token, public_key: pub_keys[0].clone() };
             return Ok(HttpResponse::Ok().json(response));
         }
         Err(_) => {
