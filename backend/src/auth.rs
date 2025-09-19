@@ -29,7 +29,7 @@ pub fn create_jwt(user_id: String) -> Result<String, jsonwebtoken::errors::Error
     encode(&Header::default(), &claims, &EncodingKey::from_secret(jwt_secret.as_ref()))
 }
 
-pub fn verify_jwt(token: String) -> Result<Payload, jsonwebtoken::errors::Error> {
+pub fn verify_jwt(token: &str) -> Result<Payload, jsonwebtoken::errors::Error> {
     let jwt_secret = env::var("JWT_SECRET")
         .unwrap_or_else(|_| panic!("JWT_SECRET must be set"));
 
