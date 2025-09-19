@@ -1,5 +1,4 @@
 use crate::Store;
-use uuid::Uuid;
 use chrono::{Utc};
 
 #[derive(Debug, Clone)]
@@ -12,8 +11,10 @@ pub struct User {
 
 #[derive(Debug)]
 pub struct CreateUserRequest {
+    pub user_id: String,
     pub email: String,
     pub password: String,
+    pub pub_key: String
 }
 
 #[derive(Debug)]
@@ -64,10 +65,9 @@ impl Store {
         let password_hash = bcrypt::hash(&request.password, bcrypt::DEFAULT_COST)
             .map_err(|e| UserError::DatabaseError(format!("Password hashing failed: {}", e)))?;
 
-        // Generate user ID and timestamp
-        let user_id = Uuid::new_v4().to_string();
+        let user_id = request.user_id.clone();
         let created_at = Utc::now();
-        let pub_key = "placeholder_public_key"; 
+        let pub_key = request.pub_key.clone();
 
         // Insert user into database
         sqlx::query!(

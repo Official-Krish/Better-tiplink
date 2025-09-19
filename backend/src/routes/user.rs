@@ -23,6 +23,7 @@ pub struct UserResponse {
     pub id: String,
     pub email: String,
     pub created_at: String,
+    pub public_key: String,
 }
 
 #[derive(Serialize)]
@@ -43,21 +44,10 @@ pub struct GeneratePubKeyInput {
 
 #[actix_web::post("/signup")]
 pub async fn sign_up(req: web::Json<SignUpRequest>, store: web::Data<Arc<Mutex<Store>>>) -> Result<HttpResponse> {
-    let locked_store = match store.lock() {
-        Ok(locked) => locked,
-        Err(_) => return Ok(HttpResponse::InternalServerError().body("Failed to lock store")),
-    };
-    let create_user_request = CreateUserRequest {
-        email: req.email.clone(),
-        password: req.password.clone(),
-    };
-    let user = match locked_store.create_user(create_user_request).await {
-        Ok(user) => user,
-        Err(err) => return Ok(HttpResponse::BadRequest().body(err.to_string())),
-    };
+    let user_id = uuid::Uuid::new_v4().to_string();
     let client = reqwest::Client::new();
     let data_to_send = GeneratePubKeyInput {
-        user_id: user.id.clone(),
+        user_id: user_id.clone(),
     };
 
     let target_url = "http://localhost:8080/generate";
@@ -82,6 +72,21 @@ pub async fn sign_up(req: web::Json<SignUpRequest>, store: web::Data<Arc<Mutex<S
             return Ok(HttpResponse::InternalServerError().body(error_message));
         }
     }
+
+    let locked_store = match store.lock() {
+        Ok(locked) => locked,
+        Err(_) => return Ok(HttpResponse::InternalServerError().body("Failed to lock store")),
+    };
+    let create_user_request = CreateUserRequest {
+        email: req.email.clone(),
+        password: req.password.clone(),
+        user_id: user_id.clone(),
+        pub_key: pub_keys[0].clone(),
+    };
+    let user = match locked_store.create_user(create_user_request).await {
+        Ok(user) => user,
+        Err(err) => return Ok(HttpResponse::BadRequest().body(err.to_string())),
+    };
     let jwt = create_jwt(user.id.clone());
     match jwt {
         Ok(token) => {
@@ -133,6 +138,7 @@ pub async fn get_user(path: web::Path<String>, store: web::Data<Arc<Mutex<Store>
         id: user.id,
         email: user.email,
         created_at: user.created_at,
+        public_key: user.public_key,
     };
     
     Ok(HttpResponse::Ok().json(user))
