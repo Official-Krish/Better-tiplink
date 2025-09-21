@@ -5,26 +5,12 @@ pub mod error;
 pub mod serialization;
 pub mod tss;
 
-use crate::{error::Error as MpcError, serialization::PartialSignature, tss::{key_agg, sign_and_broadcast, step_one, step_two}};
-use solana_sdk::{message::Message, native_token, signature::{Keypair, Signature, Signer}, transaction::Transaction};
+use crate::{serialization::PartialSignature, tss::{key_agg, sign_and_broadcast, step_one, step_two}};
+use solana_sdk::{instruction::Instruction, message::Message, native_token, signature::Keypair, system_instruction, transaction::Transaction};
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use crate::serialization::{AggMessage1, SecretAggStepOne};
-use std::convert::TryFrom;
 use base64::engine::Engine;
-
-// pub fn create_unsigned_transaction(amount: f64, to: &Pubkey, memo: Option<String>, payer: &Pubkey) -> Transaction {
-//     let amount = amount;
-//     let transfer_ins = system_instruction::transfer(payer, to, amount);
-//     let msg = match memo {
-//         None => Message::new(&[transfer_ins], Some(payer)),
-//         Some(memo) => {
-//             let memo_ins = Instruction { program_id: spl_memo::id(), accounts: Vec::new(), data: memo.into_bytes() };
-//             Message::new(&[transfer_ins, memo_ins], Some(payer))
-//         }
-//     };
-//     Transaction::new_unsigned(msg)
-// }
 
 #[derive(Serialize, Deserialize)]
 pub struct GeneratePubKeyInput {
@@ -42,7 +28,7 @@ pub struct AggAndStep1Output {
     secret_agg_step_one: SecretAggStepOne,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AggAndStep2Input {
     pub keypair_base64: String,
     pub amount: f64,
@@ -136,7 +122,7 @@ async fn generate(data: web::Json<GeneratePubKeyInput>) -> Result<HttpResponse, 
         }
     };
 
-    Ok(HttpResponse::Ok().json(final_pub_key.to_string()))
+    Ok(HttpResponse::Ok().json(&final_pub_key))
 }
 
 async fn agg_send_step1(data: web::Json<AggAndStep1Input>) -> Result<HttpResponse, Error> {
@@ -144,7 +130,7 @@ async fn agg_send_step1(data: web::Json<AggAndStep1Input>) -> Result<HttpRespons
         Ok(bytes) => bytes,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid base64 for keypair bytes")),
     };
-    let keypair = match Keypair::try_from(keypair_bytes.as_slice()) {
+    let keypair = match Keypair::from_bytes(keypair_bytes.as_slice()) {
         Ok(kp) => kp,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid keypair bytes")),
     };
@@ -160,7 +146,7 @@ async fn agg_send_step2(data: web::Json<AggAndStep2Input>) -> Result<HttpRespons
         Ok(bytes) => bytes,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid base64 for keypair bytes")),
     };
-    let keypair = match Keypair::try_from(keypair_bytes.as_slice()) {
+    let keypair = match Keypair::from_bytes(keypair_bytes.as_slice()) {
         Ok(kp) => kp,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid keypair bytes")),
     };
@@ -197,4 +183,18 @@ async fn aggregate_signatures_broadcast(data: web::Json<SignatureAggregationInpu
         }
         Err(e) => Ok(HttpResponse::InternalServerError().body(format!("Error aggregating signatures and broadcasting: {:?}", e))),
     }
+}
+
+
+pub fn create_unsigned_transaction(amount: f64, to: &Pubkey, memo: Option<String>, payer: &Pubkey) -> Transaction {
+    let amount = native_token::sol_to_lamports(amount);
+    let transfer_ins = system_instruction::transfer(payer, to, amount);
+    let msg = match memo {
+        None => Message::new(&[transfer_ins], Some(payer)),
+        Some(memo) => {
+            let memo_ins = Instruction { program_id: spl_memo::id(), accounts: Vec::new(), data: memo.into_bytes() };
+            Message::new(&[transfer_ins, memo_ins], Some(payer))
+        }
+    };
+    Transaction::new_unsigned(msg)
 }
