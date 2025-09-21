@@ -1,5 +1,3 @@
-use std::vec;
-
 use actix_web::{web::{self, post}, App, Error, HttpResponse, HttpServer};
 use serde::{Deserialize, Serialize};
 
@@ -7,13 +5,16 @@ pub mod error;
 pub mod serialization;
 pub mod tss;
 
-use crate::{error::Error as MpcError, tss::key_agg};
-use solana_sdk::signature::{Keypair, Signature};
+use crate::{error::Error as MpcError, serialization::PartialSignature, tss::{key_agg, sign_and_broadcast, step_one, step_two}};
+use solana_sdk::{message::Message, native_token, signature::{Keypair, Signature, Signer}, transaction::Transaction};
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
+use crate::serialization::{AggMessage1, SecretAggStepOne};
+use std::convert::TryFrom;
+use base64::engine::Engine;
 
 // pub fn create_unsigned_transaction(amount: f64, to: &Pubkey, memo: Option<String>, payer: &Pubkey) -> Transaction {
-//     let amount = native_token::sol_to_lamports(amount);
+//     let amount = amount;
 //     let transfer_ins = system_instruction::transfer(payer, to, amount);
 //     let msg = match memo {
 //         None => Message::new(&[transfer_ins], Some(payer)),
@@ -30,13 +31,50 @@ pub struct GeneratePubKeyInput {
     pub user_id: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AggAndStep1Input {
+    pub keypair_base64: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AggAndStep1Output {
+    agg_message1: AggMessage1,
+    secret_agg_step_one: SecretAggStepOne,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AggAndStep2Input {
+    pub keypair_base64: String,
+    pub amount: f64,
+    pub to: String,
+    pub keys: Vec<String>,
+    pub first_messages: Vec<AggMessage1>,
+    pub secret_state: SecretAggStepOne,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AggAndStep2Output {
+    pub partial_signature: PartialSignature,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SignatureAggregationInput {
+    pub amount: f64,
+    pub to: Pubkey,
+    pub keys: Vec<Pubkey>,
+    pub signatures: Vec<PartialSignature>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BroadcastResponse {
+    signature: Transaction,
+}
+
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> {
     HttpServer::new(|| {
         App::new()
         .route("/generate", post().to(generate))
-        .route("/send-single", post().to(send_single))
-        .route("/aggregate-keys", post().to(aggregate_keys))
         .route("/agg-send-step1", post().to(agg_send_step1))
         .route("/agg-send-step2", post().to(agg_send_step2))
         .route(
@@ -101,22 +139,62 @@ async fn generate(data: web::Json<GeneratePubKeyInput>) -> Result<HttpResponse, 
     Ok(HttpResponse::Ok().json(final_pub_key.to_string()))
 }
 
-async fn send_single() -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::Ok().body("Hello, world!"))
+async fn agg_send_step1(data: web::Json<AggAndStep1Input>) -> Result<HttpResponse, Error> {
+    let keypair_bytes = match base64::engine::general_purpose::STANDARD.decode(&data.keypair_base64) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid base64 for keypair bytes")),
+    };
+    let keypair = match Keypair::try_from(keypair_bytes.as_slice()) {
+        Ok(kp) => kp,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid keypair bytes")),
+    };
+    let response = step_one(keypair);
+    Ok(HttpResponse::Ok().json(AggAndStep1Output {
+        agg_message1: response.0,
+        secret_agg_step_one: response.1,
+    }))
 }
 
-async fn aggregate_keys() -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::Ok().body("Hello, world!"))
+async fn agg_send_step2(data: web::Json<AggAndStep2Input>) -> Result<HttpResponse, Error> {
+    let keypair_bytes = match base64::engine::general_purpose::STANDARD.decode(&data.keypair_base64) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid base64 for keypair bytes")),
+    };
+    let keypair = match Keypair::try_from(keypair_bytes.as_slice()) {
+        Ok(kp) => kp,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid keypair bytes")),
+    };
+    let to = match Pubkey::from_str(&data.to) {
+        Ok(pk) => pk,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid recipient public key")),
+    };
+    let keys: Vec<Pubkey> = match data.keys.iter().map(|k| Pubkey::from_str(k)).collect() {
+        Ok(ks) => ks,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid public key in keys array")),
+    };
+    let recent_block_hash = solana_sdk::hash::Hash::new_unique();
+    let first_messages = data.first_messages.clone();
+    let secret_state = data.secret_state.clone();
+    let response = step_two(keypair, data.amount, to, None, recent_block_hash, keys, first_messages, secret_state);
+    match response {
+        Ok(sig) => Ok(HttpResponse::Ok().json(AggAndStep2Output { partial_signature: sig })),
+        Err(e) => Ok(HttpResponse::InternalServerError().body(format!("Error in step two: {:?}", e))),
+    }
 }
 
-async fn agg_send_step1() -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::Ok().body("Hello, world!"))
-}
+async fn aggregate_signatures_broadcast(data: web::Json<SignatureAggregationInput>) -> Result<HttpResponse, Error> {
+    let recent_block_hash = solana_sdk::hash::Hash::new_unique();
+    let keys = data.keys.clone();
+    let signatures = data.signatures.clone();
+    let response = sign_and_broadcast(data.amount, data.to, None, recent_block_hash, keys, signatures);
 
-async fn agg_send_step2() -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::Ok().body("Hello, world!"))
-}
-
-async fn aggregate_signatures_broadcast() -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::Ok().body("Hello, world!"))
+    match response {
+        Ok(sig) => {
+            let broadcast_response = BroadcastResponse {
+                signature: sig,
+            };
+            Ok(HttpResponse::Ok().json(broadcast_response))
+        }
+        Err(e) => Ok(HttpResponse::InternalServerError().body(format!("Error aggregating signatures and broadcasting: {:?}", e))),
+    }
 }

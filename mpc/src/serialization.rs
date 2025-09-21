@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use curv::elliptic::curves::{DeserializationError, Point, PointFromBytesError, Scalar};
 use multi_party_eddsa::protocols::musig2::{PrivatePartialNonces, PublicPartialNonces};
+use serde::{Deserialize, Serialize};
 use solana_sdk::signature::Signature;
 use spl_memo::solana_program::pubkey::Pubkey;
 
@@ -103,7 +104,7 @@ pub trait Serialize: Sized {
     fn size_hint(&self) -> usize;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct AggMessage1 {
     pub public_nonces: PublicPartialNonces,
     pub sender: Pubkey,
@@ -135,7 +136,7 @@ impl Serialize for AggMessage1 {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct PartialSignature(pub Signature);
 
 impl Serialize for PartialSignature {
@@ -161,7 +162,7 @@ impl Serialize for PartialSignature {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SecretAggStepOne {
     pub private_nonces: PrivatePartialNonces,
     pub public_nonces: PublicPartialNonces,
