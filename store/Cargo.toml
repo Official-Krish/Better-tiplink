@@ -10,3 +10,4 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uui
 bcrypt = "0.17.1"
 tokio = { version = "1.0", features = ["full"] }
 dotenvy = "0.15.7"
+base64 = "0.22.1"
