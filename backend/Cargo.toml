@@ -15,3 +15,4 @@ chrono = "0.4.41"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 uuid = "1.18.1"
 futures = "0.3.31"
+solana-sdk = "1"
