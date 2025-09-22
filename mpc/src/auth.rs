@@ -1,13 +1,11 @@
 use std::env;
-
 use dotenvy::dotenv;
-use jsonwebtoken::{encode, Header, EncodingKey};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use chrono::Utc;
-use jsonwebtoken::{decode, DecodingKey, Validation};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Payload {
-    pub user_id: String,
+    pub id: String,
     pub exp: usize,
 }
 
@@ -15,24 +13,6 @@ pub struct Payload {
 pub struct InternalPayload {
     pub id: String,
     pub exp: usize,
-}
-
-pub fn create_jwt(user_id: String) -> Result<String, jsonwebtoken::errors::Error> {
-    dotenv().ok();
-
-    let expiration = Utc::now()
-        .checked_add_signed(chrono::Duration::minutes(60))
-        .expect("valid timestamp")
-        .timestamp() as usize;
-
-    let claims = Payload {
-        user_id: user_id,
-        exp: expiration,
-    };
-    let jwt_secret = env::var("JWT_SECRET")
-        .unwrap_or_else(|_| panic!("JWT_SECRET must be set"));
-
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(jwt_secret.as_ref()))
 }
 
 pub fn verify_jwt(token: &str) -> Result<Payload, jsonwebtoken::errors::Error> {

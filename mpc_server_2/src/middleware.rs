@@ -3,6 +3,7 @@ use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpResponse,
 };
+use chrono::Utc;
 use futures::future::{ok, Ready, LocalBoxFuture};
 use std::rc::Rc;
 
@@ -65,14 +66,13 @@ where
 
                     match verify_jwt(token) {
                         Ok(_payload) => {
-                            if _payload.exp < chrono::Utc::now().timestamp() as usize {
-                                // Token has expired
+                            if _payload.exp < Utc::now().timestamp() as usize {
                                 let response = HttpResponse::Unauthorized()
                                     .json(serde_json::json!({"error": "Token has expired"}));
                                 let srv_resp = req.into_response(response.map_into_boxed_body());
                                 return Ok(srv_resp);
                             }
-                            if _payload.user_id.is_empty() {
+                            if _payload.id.is_empty() {
                                 let response = HttpResponse::Unauthorized()
                                     .json(serde_json::json!({"error": "Invalid user ID in token"}));
                                 let srv_resp = req.into_response(response.map_into_boxed_body());

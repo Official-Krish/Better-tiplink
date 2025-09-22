@@ -6,7 +6,12 @@ edition = "2024"
 [dependencies]
 actix-web = "4.11.0"
 base64 = "0.22.1"
+chrono = "0.4.42"
+dotenvy = "0.15.7"
 ed25519-dalek = "2.2.0"
+futures = "0.3.31"
+jsonwebtoken = "9.3.1"
 serde = "1.0.225"
+serde_json = "1.0.145"
 solana-sdk = "3.0.0"
 store = {path = "../store"}

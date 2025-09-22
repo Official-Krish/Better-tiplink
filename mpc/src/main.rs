@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 pub mod error;
 pub mod serialization;
 pub mod tss;
+pub mod auth;
+pub mod middleware;
 
 use crate::{serialization::PartialSignature, tss::{key_agg, sign_and_broadcast, step_one, step_two}};
 use solana_sdk::{instruction::Instruction, message::Message, native_token, signature::Keypair, system_instruction, transaction::Transaction};
@@ -60,12 +62,12 @@ struct BroadcastResponse {
 async fn main() -> Result<(), std::io::Error> {
     HttpServer::new(|| {
         App::new()
-        .route("/generate", post().to(generate))
-        .route("/agg-send-step1", post().to(agg_send_step1))
-        .route("/agg-send-step2", post().to(agg_send_step2))
+        .route("/generate", post().to(generate).wrap(middleware::AuthMiddleware))
+        .route("/agg-send-step1", post().to(agg_send_step1).wrap(middleware::AuthMiddleware))
+        .route("/agg-send-step2", post().to(agg_send_step2).wrap(middleware::AuthMiddleware))
         .route(
             "/aggregate-signatures-broadcast",
-            post().to(aggregate_signatures_broadcast),
+            post().to(aggregate_signatures_broadcast).wrap(middleware::AuthMiddleware),
         )
     })
     
@@ -75,6 +77,13 @@ async fn main() -> Result<(), std::io::Error> {
 }
 
 async fn generate(data: web::Json<GeneratePubKeyInput>) -> Result<HttpResponse, Error> {
+    let token = match auth::create_jwt_for_communication(data.user_id.clone()) {
+        Ok(t) => t,
+        Err(e) => {
+            let error_message = format!("Error creating JWT: {:?}", e);
+            return Ok(HttpResponse::InternalServerError().body(error_message));
+        }
+    };
     let mut pub_keys = vec![];
     let client = reqwest::Client::new();
     let data_to_send = GeneratePubKeyInput {
@@ -89,6 +98,7 @@ async fn generate(data: web::Json<GeneratePubKeyInput>) -> Result<HttpResponse, 
     for url in target_url {
         match client.post(url)
             .json(&data_to_send)
+            .bearer_auth(&token)
             .send()
             .await
         {

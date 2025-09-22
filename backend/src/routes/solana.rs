@@ -161,6 +161,13 @@ pub async fn quote(req: web::Json<QuoteRequest>) -> Result<HttpResponse> {
 
 #[actix_web::post("/swap")]
 pub async fn swap(req: web::Json<SwapRequest>) -> Result<HttpResponse> {
+    let token = match crate::auth::create_jwt_for_communication(req.user_id.clone()) {
+        Ok(t) => t,
+        Err(e) => {
+            let error_message = format!("Error creating JWT: {:?}", e);
+            return Ok(HttpResponse::InternalServerError().body(error_message));
+        }
+    };
     let mut keypairs = vec![];
 
     let client = reqwest::Client::new();
@@ -174,6 +181,7 @@ pub async fn swap(req: web::Json<SwapRequest>) -> Result<HttpResponse> {
             .json(&GetKeyPairInput {
                 user_id: req.user_id.clone(),
             })
+            .bearer_auth(&token)
             .send()
             .await
         {
@@ -204,6 +212,7 @@ pub async fn swap(req: web::Json<SwapRequest>) -> Result<HttpResponse> {
     for (i, keypair) in keypairs.iter().enumerate() {
         match client.post("http://localhost:8080/agg-send-step1")
             .json(&keypair)
+            .bearer_auth(&token)
             .send()
             .await
         {
@@ -243,6 +252,7 @@ pub async fn swap(req: web::Json<SwapRequest>) -> Result<HttpResponse> {
                 first_messages: step1_response.iter().map(|r| r[0].clone()).collect(),
                 secret_state: step1_response[i][1].clone(),
             })
+            .bearer_auth(token.clone())
             .send()
             .await
         {
@@ -275,6 +285,7 @@ pub async fn swap(req: web::Json<SwapRequest>) -> Result<HttpResponse> {
             keys: keypairs.iter().map(|k| k.parse().unwrap()).collect(),
             signatures: step2_response.iter().map(|s| s.parse().unwrap()).collect(),
         })
+        .bearer_auth(&token)
         .send()
         .await
     {

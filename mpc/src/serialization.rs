@@ -154,7 +154,6 @@ impl Serialize for PartialSignature {
         if tag != Tag::PartialSignature {
             return Err(Error::WrongTag { expected: Tag::PartialSignature, found: tag });
         }
-        let signature_bytes: [u8; 64] = b[1..1 + 64].try_into().map_err(|_| Error::InputTooShort { expected: 64, found: b[1..].len() })?;
         Ok(PartialSignature(Signature::new(&b[1..1 + 64])))
 
     }

@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use serde::{Serialize, Deserialize};
 
 mod convert;
+mod middleware;
+mod auth;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -19,8 +21,8 @@ async fn main() -> std::io::Result<()> {
     let arced_s = Arc::new(Mutex::new(s.mpc_server_1));
     HttpServer::new(move || {
         App::new()
-            .service(generate)
-            .service(get_keypair)
+            .service(generate).wrap(middleware::AuthMiddleware)
+            .service(get_keypair).wrap(middleware::AuthMiddleware)
             .app_data(Data::new(arced_s.clone()))
     })
     .bind("127.0.0.1:9000")?
