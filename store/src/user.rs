@@ -151,4 +151,90 @@ impl Store {
 
         Ok(user)
     }
+
+    pub async fn get_sol_balance(&self, pub_key: String) -> Result<u64, UserError> {
+        let user = sqlx::query!(
+            "SELECT id FROM users WHERE public_key = $1",
+            pub_key
+        )
+        .fetch_optional(&self.backend)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+
+        if user.is_none() {
+            return Err(UserError::InvalidInput("User with given public key not found".to_string()));
+        }
+
+        let asset = sqlx::query!(
+            "SELECT mint_address, id FROM assets WHERE mint_address = $1 AND name = 'SOL'",
+            "123"
+        )
+        .fetch_optional(&self.backend)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+
+        if asset.is_none() {
+            return Err(UserError::InvalidInput("SOL asset not found".to_string()));
+        }
+
+        let balance = sqlx::query!(
+            "SELECT amount::BIGINT as amount FROM balances WHERE user_id = $1 AND asset_id = $2",
+            user.unwrap().id,
+            asset.unwrap().id
+        )
+        .fetch_optional(&self.backend)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+    
+        match balance {
+            Some(bal) => match bal.amount {
+                Some(amount) => Ok(amount as u64),
+                None => Ok(0),
+            },
+            None => Ok(0),
+        }
+    }
+
+    pub async fn get_token_balance(&self, pub_key: String, mint_address: String) -> Result<u64, UserError> {
+        let user = sqlx::query!(
+            "SELECT id FROM users WHERE public_key = $1",
+            pub_key
+        )
+        .fetch_optional(&self.backend)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+
+        if user.is_none() {
+            return Err(UserError::InvalidInput("User with given public key not found".to_string()));
+        }
+
+        let asset = sqlx::query!(
+            "SELECT mint_address, id FROM assets WHERE mint_address = $1",
+            mint_address
+        )
+        .fetch_optional(&self.backend)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+
+        if asset.is_none() {
+            return Err(UserError::InvalidInput("Asset with given mint address not found".to_string()));
+        }
+
+        let balance = sqlx::query!(
+            "SELECT amount::BIGINT as amount FROM balances WHERE user_id = $1 AND asset_id = $2",
+            user.unwrap().id,
+            asset.unwrap().id
+        )
+        .fetch_optional(&self.backend)
+        .await
+        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+    
+        match balance {
+            Some(bal) => match bal.amount {
+                Some(amount) => Ok(amount as u64),
+                None => Ok(0),
+            },
+            None => Ok(0),
+        }
+    }
 }
